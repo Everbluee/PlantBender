@@ -1,8 +1,13 @@
 package com.example.plantbender
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.IBinder
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,9 +25,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
@@ -43,7 +46,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
@@ -51,17 +53,22 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.res.ResourcesCompat.getFont
 import com.example.plantbender.ui.theme.PlantBenderTheme
+import org.eclipse.paho.android.service.MqttAndroidClient
+import org.eclipse.paho.android.service.MqttService
+import org.eclipse.paho.client.mqttv3.IMqttActionListener
+import org.eclipse.paho.client.mqttv3.IMqttToken
+import org.eclipse.paho.client.mqttv3.MqttClient
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions
+import org.eclipse.paho.client.mqttv3.MqttMessage
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import java.math.RoundingMode
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -74,9 +81,9 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     val data by GroundHumidityViewModel().data.observeAsState(initial = emptyList())
                     val lastData = if (data.isNotEmpty())
-                        data.last().humidityValue.toIntOrNull() ?: 0
+                        data.last().humidityValue.toDoubleOrNull() ?: 0.0
                     else
-                        0
+                        0.0
 
                     NonRegularGrayscaleWavesBackground()
                     Column(
@@ -129,8 +136,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun CircularPercentageIndicator(data: Int?, modifier: Modifier = Modifier, context: Context) {
-    val percentage = data ?: 0
+fun CircularPercentageIndicator(data: Double, modifier: Modifier = Modifier, context: Context) {
+    val percentage = data.toFloat()
 
     Canvas(modifier = modifier) {
         val size = min(size.width, size.height)
@@ -181,7 +188,7 @@ fun CircularPercentageIndicator(data: Int?, modifier: Modifier = Modifier, conte
         // Draw percentage text
         drawContext.canvas.nativeCanvas.apply {
             drawText(
-                "$percentage%",
+                "${percentage.toBigDecimal().setScale(2, RoundingMode.UP)}%",
                 size / 2,
                 size / 2 - (paint.ascent() + paint.descent()) / 2,
                 android.graphics.Paint().apply {
@@ -260,14 +267,12 @@ fun HistoricalRecordsTableHorizontal() {
                         items(data.size) { index ->
                             val record = data.reversed()[index]
 
-                            // Conditional background color for alternating rows
                             val rowBackgroundColor = if (index % 2 == 0) {
-                                Color(0xFFE0E0E0) // Light grey for even rows
+                                Color(0xFFE0E0E0)
                             } else {
-                                Color(0xFFF5F5F5) // Slightly lighter grey for odd rows
+                                Color(0xFFF5F5F5)
                             }
 
-                            // Card for each record
                             Card(
                                 modifier = Modifier
                                     .padding(8.dp)
@@ -370,14 +375,14 @@ fun NonRegularGrayscaleWavesBackground(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun ToggleButton(wateringLevel: Int, context: Context) {
+fun ToggleButton(wateringLevel: Double, context: Context) {
     val isOn = remember { mutableStateOf(false) }
 
     Button(
         onClick = {
             val newState = !isOn.value
             isOn.value = newState
-            sendRequest(newState, context)
+            sendRequest(if (newState) "1" else "0", context)
         },
         enabled = wateringLevel < 50,
         colors = ButtonColors(
@@ -395,7 +400,7 @@ fun ToggleButton(wateringLevel: Int, context: Context) {
     }
 }
 
-fun sendRequest(value: Boolean, context: Context) {
+fun sendRequest(value: String, context: Context) {
     RetrofitClient.apiService.sendActivation(value).enqueue(object : Callback<Void> {
         override fun onResponse(call: Call<Void>, response: Response<Void>) {
             if (response.isSuccessful) {

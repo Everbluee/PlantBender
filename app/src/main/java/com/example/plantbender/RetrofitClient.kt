@@ -10,7 +10,7 @@ object RetrofitClient {
     private const val BASE_URL = "https://iottodb4.azurewebsites.net/api/"
 
     private val json = Json {
-        ignoreUnknownKeys = true // Ignores unexpected JSON keys
+        ignoreUnknownKeys = true
     }
 
     @OptIn(ExperimentalSerializationApi::class)

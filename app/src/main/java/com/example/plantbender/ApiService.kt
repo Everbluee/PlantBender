@@ -10,5 +10,5 @@ interface ApiService {
     fun getData(): Call<List<GroundHumidity>>
 
     @POST("HttpTrigger2?code=CXZODUDTebCvcJi5HVrj37k9XjZHueBq9RJ3lncGCMPPAzFua_M9sA%3D%3D")
-    fun sendActivation(@Body value: Boolean): Call<Void>
+    fun sendActivation(@Body value: String): Call<Void>
 }

@@ -3,6 +3,7 @@ package com.example.plantbender
 import InstantSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.math.RoundingMode
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -16,7 +17,11 @@ data class GroundHumidity(
     val measurement_time: Instant,
 ) {
     val humidityValue: String
-        get() = humidity?.toString() ?: "No data"
+        get() = humidity
+            ?.div(1023.0)
+            ?.times(100)
+            ?.toBigDecimal()?.setScale(2, RoundingMode.UP)
+            ?.toString() ?: "No data"
 
     val date: String
         get() = measurement_time.atZone(ZoneId.systemDefault())
